@@ -286,11 +286,16 @@
       "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled&$top=999";
 
     const result = await graphGet(path);
-    const users = (result.value || []).map(normalizePerson).filter(isEnabledPerson);
+    const rawUsers = (result.value || []).map(normalizePerson);
+    const users = [];
 
-    users.forEach(function (u) {
-      personCache.set(u.id, u);
-    });
+    for (let i = 0; i < rawUsers.length; i += 1) {
+      const validatedUser = await resolveEnabledPerson(rawUsers[i]);
+      if (validatedUser) {
+        users.push(validatedUser);
+        personCache.set(validatedUser.id, validatedUser);
+      }
+    }
 
     users.sort(function (a, b) {
       return (a.displayName || "").localeCompare(b.displayName || "");
@@ -324,9 +329,10 @@
       }
 
       const normalized = normalizePerson(manager);
-      personCache.set(normalized.id, normalized);
-      if (normalized.accountEnabled) {
-        chain.push(normalized);
+      const validatedManager = await resolveEnabledPerson(normalized);
+      if (validatedManager) {
+        personCache.set(validatedManager.id, validatedManager);
+        chain.push(validatedManager);
       }
       currentId = normalized.id;
     }
@@ -570,7 +576,7 @@
     return {
       id: raw.id,
       displayName: raw.displayName || "Unknown",
-      accountEnabled: raw.accountEnabled !== false,
+      accountEnabled: typeof raw.accountEnabled === "boolean" ? raw.accountEnabled : null,
       jobTitle: raw.jobTitle || "",
       department: raw.department || "",
       mail: raw.mail || "",
@@ -597,7 +603,20 @@
   }
 
   function isEnabledPerson(person) {
-    return !!person && person.accountEnabled !== false;
+    return !!person && person.accountEnabled === true;
+  }
+
+  async function resolveEnabledPerson(person) {
+    if (!person || !person.id) {
+      return null;
+    }
+
+    if (typeof person.accountEnabled === "boolean") {
+      return person.accountEnabled ? person : null;
+    }
+
+    const fullPerson = await getUserById(person.id);
+    return isEnabledPerson(fullPerson) ? fullPerson : null;
   }
 
   function initials(name) {
