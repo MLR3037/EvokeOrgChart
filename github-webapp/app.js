@@ -502,12 +502,17 @@
     name.className = "name";
     name.textContent = node.displayName || "Unknown";
 
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = [node.jobTitle, node.department].filter(Boolean).join(" | ") || "No title";
+    const title = document.createElement("div");
+    title.className = "meta";
+    title.textContent = node.jobTitle || "No title";
+
+    const department = document.createElement("div");
+    department.className = "meta";
+    department.textContent = node.department || "No department";
 
     text.appendChild(name);
-    text.appendChild(meta);
+    text.appendChild(title);
+    text.appendChild(department);
 
     header.appendChild(avatar);
     header.appendChild(text);
