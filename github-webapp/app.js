@@ -166,29 +166,31 @@
       const depth = clampDepth(maxDepthInput.value);
       maxDepthInput.value = String(depth);
 
-      let rootNode = upn
-        ? await getUserByUpn(upn)
-        : await graphGet("/me?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
+      if (upn) {
+        let rootNode = await getUserByUpn(upn);
 
-      if (!rootNode || !rootNode.id) {
-        throw new Error("Could not resolve root user. Check the UPN or permissions.");
+        if (!rootNode || !rootNode.id) {
+          throw new Error("Could not resolve root user. Check the UPN or permissions.");
+        }
+
+        rootNode = normalizePerson(rootNode);
+
+        if (!rootNode.accountEnabled) {
+          throw new Error("The selected root user account is disabled.");
+        }
+
+        const includeManagerChain = includeManagerCheckbox.checked;
+        let managerChain = [];
+        if (includeManagerChain) {
+          managerChain = await fetchManagerChain(rootNode.id);
+        }
+
+        const subtree = await buildSubtree(rootNode.id, 0, depth);
+        orgTree = attachManagerChain(managerChain, subtree);
+      } else {
+        orgTree = await buildOrgForest(depth);
       }
 
-      rootNode = normalizePerson(rootNode);
-
-      if (!rootNode.accountEnabled) {
-        throw new Error("The selected root user account is disabled.");
-      }
-
-      const includeManagerChain = includeManagerCheckbox.checked;
-      let managerChain = [];
-      if (includeManagerChain) {
-        managerChain = await fetchManagerChain(rootNode.id);
-      }
-
-      const subtree = await buildSubtree(rootNode.id, 0, depth);
-
-      orgTree = attachManagerChain(managerChain, subtree);
       expanded.clear();
       expandDefaults(orgTree, 0);
       autoExpandForSearch();
@@ -366,6 +368,67 @@
 
     node.children = children;
     return node;
+  }
+
+  async function buildOrgForest(maxDepth) {
+    const roots = await getTopLevelUsers();
+
+    if (roots.length === 0) {
+      throw new Error("No top-level users were found in Microsoft 365.");
+    }
+
+    if (roots.length === 1) {
+      return buildSubtree(roots[0].id, 0, maxDepth);
+    }
+
+    const forestChildren = [];
+    for (let i = 0; i < roots.length; i += 1) {
+      const childTree = await buildSubtree(roots[i].id, 0, maxDepth);
+      if (childTree) {
+        forestChildren.push(childTree);
+      }
+    }
+
+    return {
+      id: "org-root",
+      displayName: "Executive Leadership",
+      accountEnabled: true,
+      jobTitle: "Multiple top-level leaders",
+      department: "",
+      mail: "",
+      userPrincipalName: "",
+      officeLocation: "",
+      parentId: null,
+      children: forestChildren
+    };
+  }
+
+  async function getTopLevelUsers() {
+    let path = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled&$expand=manager($select=id)&$filter=accountEnabled eq true&$top=999";
+    const users = [];
+
+    while (path) {
+      const result = await graphGet(path);
+      const batch = (result.value || []).map(normalizePerson).filter(function (person) {
+        return isEnabledPerson(person) && !(person.manager && person.manager.id);
+      });
+
+      for (let i = 0; i < batch.length; i += 1) {
+        const validatedUser = await resolveEnabledPerson(batch[i]);
+        if (validatedUser) {
+          users.push(validatedUser);
+          personCache.set(validatedUser.id, validatedUser);
+        }
+      }
+
+      path = result["@odata.nextLink"] ? result["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : null;
+    }
+
+    users.sort(function (a, b) {
+      return (a.displayName || "").localeCompare(b.displayName || "");
+    });
+
+    return users;
   }
 
   function attachManagerChain(chain, root) {
@@ -577,6 +640,7 @@
       id: raw.id,
       displayName: raw.displayName || "Unknown",
       accountEnabled: typeof raw.accountEnabled === "boolean" ? raw.accountEnabled : null,
+      manager: raw.manager || null,
       jobTitle: raw.jobTitle || "",
       department: raw.department || "",
       mail: raw.mail || "",
@@ -592,6 +656,7 @@
       id: person.id,
       displayName: person.displayName,
       accountEnabled: person.accountEnabled,
+      manager: person.manager || null,
       jobTitle: person.jobTitle,
       department: person.department,
       mail: person.mail,
