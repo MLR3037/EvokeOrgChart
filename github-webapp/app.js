@@ -726,7 +726,7 @@
     }
 
     if (typeof person.accountEnabled === "boolean") {
-      if (!person.accountEnabled) {
+      if (!isActiveMemberPerson(person)) {
         return null;
       }
       if (person.managerId) {
@@ -754,6 +754,10 @@
         }
         fullPerson.managerId = null;
       }
+    }
+
+    if (!fullPerson.managerId) {
+      return null;
     }
 
     return fullPerson;
