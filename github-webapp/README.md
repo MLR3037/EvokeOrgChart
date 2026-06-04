@@ -27,7 +27,7 @@ In the app registration:
 2. Add these:
    - User.Read
    - User.Read.All
-   - Org.Read.All
+   - Organization.Read.All
 3. Click Grant admin consent for your tenant.
 
 If your tenant policy blocks broad delegated permissions, ask your Entra admin for approved alternatives.

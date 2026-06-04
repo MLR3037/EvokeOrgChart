@@ -9,6 +9,6 @@ window.APP_CONFIG = {
   },
   graph: {
     // These scopes are requested during sign in.
-    scopes: ["User.Read", "User.Read.All", "Org.Read.All"]
+    scopes: ["User.Read", "User.Read.All", "Organization.Read.All"]
   }
 };
