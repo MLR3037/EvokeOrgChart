@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>M365 Org Chart</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="background-glow"></div>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Microsoft 365 + Microsoft Graph</p>
+          <h1>Interactive Organization Chart</h1>
+          <p class="subtitle">Sign in with your work account, choose a starting user, and explore your reporting structure.</p>
+        </div>
+        <div class="hero-actions">
+          <button id="loginBtn" class="btn btn-primary">Sign in</button>
+          <button id="logoutBtn" class="btn btn-ghost" disabled>Sign out</button>
+        </div>
+      </header>
+
+      <section class="panel controls-panel">
+        <div class="control-grid">
+          <label>
+            Root user UPN or email (optional)
+            <input id="rootUpn" type="text" placeholder="ceo@contoso.com" />
+          </label>
+          <label>
+            Max depth
+            <input id="maxDepth" type="number" min="1" max="8" value="4" />
+          </label>
+          <label>
+            Search names or titles
+            <input id="searchInput" type="search" placeholder="Type to highlight..." disabled />
+          </label>
+          <label class="inline-toggle">
+            <input id="includeManager" type="checkbox" checked />
+            Include manager chain above root
+          </label>
+        </div>
+        <div class="controls-row">
+          <button id="loadBtn" class="btn btn-primary" disabled>Load org chart</button>
+          <button id="expandAllBtn" class="btn btn-secondary" disabled>Expand all</button>
+          <button id="collapseAllBtn" class="btn btn-secondary" disabled>Collapse all</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="status-row">
+          <p id="statusText">Configure app registration in config.js, then sign in.</p>
+          <p id="signedInText">Not signed in</p>
+        </div>
+        <div id="chartContainer" class="chart-wrap empty-state">
+          <p>Org chart will appear here after you sign in and load data.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://alcdn.msauth.net/browser/2.39.0/js/msal-browser.min.js"></script>
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

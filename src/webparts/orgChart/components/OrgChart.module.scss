@@ -1,0 +1,340 @@
+// OrgChart.module.scss
+// Clean, professional org chart styles optimized for SharePoint
+
+$brand-blue: #0078d4;      // Microsoft/SharePoint blue
+$brand-dark: #1a2332;
+$card-bg: #ffffff;
+$card-border: #e1e8f0;
+$text-primary: #1a2332;
+$text-secondary: #5a6a7e;
+$text-muted: #8a9bb0;
+$root-gradient: linear-gradient(135deg, #0078d4 0%, #004578 100%);
+$shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 120, 212, 0.08);
+$shadow-hover: 0 6px 20px rgba(0, 120, 212, 0.18), 0 0 0 1px rgba(0, 120, 212, 0.2);
+
+// ─── Container ───────────────────────────────────────────────────────────────
+
+.container {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f4f7fb;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: $brand-dark;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.titleBlock {
+  flex-shrink: 0;
+}
+
+.chartTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search {
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.1);
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+  width: 200px;
+  transition: all 0.2s;
+
+  &::placeholder { color: rgba(255,255,255,0.5); }
+
+  &:focus {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.4);
+    width: 240px;
+  }
+}
+
+.zoomControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  button {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+
+    &:hover { background: rgba(255,255,255,0.22); }
+    &:last-child { font-size: 11px; width: auto; padding: 0 8px; }
+  }
+
+  span {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    min-width: 36px;
+    text-align: center;
+  }
+}
+
+// ─── Scroll + Tree ────────────────────────────────────────────────────────────
+
+.scrollArea {
+  overflow: auto;
+  padding: 40px 24px 60px;
+  min-height: 300px;
+}
+
+.tree {
+  display: inline-block;
+  min-width: 100%;
+  transform-origin: top center;
+  transition: transform 0.2s;
+}
+
+// ─── Node / Card ──────────────────────────────────────────────────────────────
+
+.nodeWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: $card-bg;
+  border: 1px solid $card-border;
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 220px;
+  max-width: 280px;
+  box-shadow: $shadow-card;
+  transition: box-shadow 0.2s, transform 0.15s;
+  position: relative;
+  cursor: default;
+
+  &:hover {
+    box-shadow: $shadow-hover;
+    transform: translateY(-1px);
+    z-index: 2;
+  }
+}
+
+.rootCard {
+  background: $root-gradient;
+  border-color: transparent;
+  min-width: 260px;
+
+  .name { color: #fff; font-size: 15px; }
+  .title { color: rgba(255,255,255,0.8); }
+  .dept { color: rgba(255,255,255,0.6); }
+  .initials { background: rgba(255,255,255,0.2); color: #fff; }
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #e8f0fa;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #c7dff7, #a8cbf5);
+  color: $brand-blue;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+// ─── Info ─────────────────────────────────────────────────────────────────────
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2332;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title {
+  font-size: 11px;
+  color: #5a6a7e;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dept {
+  font-size: 10px;
+  color: #8a9ba8;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ─── Expand/Collapse Toggle ───────────────────────────────────────────────────
+
+.toggle {
+  background: none;
+  border: 1px solid $card-border;
+  border-radius: 12px;
+  padding: 2px 7px;
+  font-size: 10px;
+  color: $text-secondary;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #e8f0fa;
+    border-color: $brand-blue;
+    color: $brand-blue;
+  }
+
+  &.expanded span { color: $brand-blue; }
+}
+
+// ─── Tree Connectors ──────────────────────────────────────────────────────────
+
+.children {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 0;
+}
+
+.connector {
+  width: 2px;
+  height: 28px;
+  background: $card-border;
+  margin: 0 auto;
+}
+
+.childRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  position: relative;
+  padding-top: 0;
+
+  // Horizontal bar connecting siblings
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(50% - 50%);
+    height: 2px;
+    background: $card-border;
+    // Calculated dynamically by the tree layout - approximation:
+    left: 50px;
+    right: 50px;
+  }
+
+  > .nodeWrapper {
+    padding-top: 28px;
+    position: relative;
+
+    // Vertical drop line per child
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 28px;
+      background: $card-border;
+    }
+  }
+  .root {}
+}
+
+// ─── States ───────────────────────────────────────────────────────────────────
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  color: $text-secondary;
+  text-align: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e1e8f0;
+  border-top-color: $brand-blue;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.errorIcon {
+  font-size: 32px;
+}
+
+.hint {
+  font-size: 12px;
+  color: $text-muted;
+  max-width: 400px;
+  line-height: 1.5;
+}

@@ -1,0 +1,4 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/spfx-deploy-package.schema.json",
+    "workPackage": "./package-solution.json"
+}
