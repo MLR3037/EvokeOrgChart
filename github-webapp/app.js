@@ -268,14 +268,14 @@
       return personCache.get(id);
     }
 
-    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
+    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
   }
 
   async function getUserByUpn(upn) {
-    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
+    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
@@ -285,7 +285,7 @@
     const path =
       "/users/" +
       encodeURIComponent(userId) +
-      "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled&$top=999";
+      "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$top=999";
 
     const result = await graphGet(path);
     const rawUsers = (result.value || []).map(normalizePerson);
@@ -314,9 +314,7 @@
       let manager;
       try {
         manager = await graphGet(
-          "/users/" +
-            encodeURIComponent(currentId) +
-            "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled"
+          "/users/" + encodeURIComponent(currentId) + "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
         );
       } catch (err) {
         const msg = safeMessage(err).toLowerCase();
@@ -371,22 +369,40 @@
   }
 
   async function buildOrgForest(maxDepth) {
-    const roots = await getTopLevelUsers();
+    const users = await getAllActiveUsers();
 
-    if (roots.length === 0) {
+    if (users.length === 0) {
       throw new Error("No top-level users were found in Microsoft 365.");
     }
 
-    if (roots.length === 1) {
-      return buildSubtree(roots[0].id, 0, maxDepth);
-    }
+    const nodeMap = new Map();
+    users.forEach(function (user) {
+      nodeMap.set(user.id, cloneNode(user));
+    });
 
-    const forestChildren = [];
-    for (let i = 0; i < roots.length; i += 1) {
-      const childTree = await buildSubtree(roots[i].id, 0, maxDepth);
-      if (childTree) {
-        forestChildren.push(childTree);
+    const roots = [];
+    users.forEach(function (user) {
+      const node = nodeMap.get(user.id);
+      const managerId = user.managerId || null;
+      if (managerId && nodeMap.has(managerId)) {
+        nodeMap.get(managerId).children.push(node);
+      } else {
+        roots.push(node);
       }
+    });
+
+    nodeMap.forEach(function (node) {
+      node.children.sort(function (a, b) {
+        return (a.displayName || "").localeCompare(b.displayName || "");
+      });
+    });
+
+    roots.sort(function (a, b) {
+      return (a.displayName || "").localeCompare(b.displayName || "");
+    });
+
+    if (roots.length === 1) {
+      return roots[0];
     }
 
     return {
@@ -399,22 +415,22 @@
       userPrincipalName: "",
       officeLocation: "",
       parentId: null,
-      children: forestChildren
+      children: roots
     };
   }
 
-  async function getTopLevelUsers() {
-    let path = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled&$expand=manager($select=id)&$filter=accountEnabled eq true&$top=999";
+  async function getAllActiveUsers() {
+    let path = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$filter=accountEnabled eq true and userType eq 'Member'&$top=999";
     const users = [];
 
     while (path) {
       const result = await graphGet(path);
       const batch = (result.value || []).map(normalizePerson).filter(function (person) {
-        return isEnabledPerson(person) && !(person.manager && person.manager.id);
+        return isActiveMemberPerson(person);
       });
 
       for (let i = 0; i < batch.length; i += 1) {
-        const validatedUser = await resolveEnabledPerson(batch[i]);
+        const validatedUser = await resolveActiveUserWithManager(batch[i]);
         if (validatedUser) {
           users.push(validatedUser);
           personCache.set(validatedUser.id, validatedUser);
@@ -640,7 +656,8 @@
       id: raw.id,
       displayName: raw.displayName || "Unknown",
       accountEnabled: typeof raw.accountEnabled === "boolean" ? raw.accountEnabled : null,
-      manager: raw.manager || null,
+      userType: raw.userType || null,
+      managerId: raw.managerId || raw.manager?.id || null,
       jobTitle: raw.jobTitle || "",
       department: raw.department || "",
       mail: raw.mail || "",
@@ -656,7 +673,8 @@
       id: person.id,
       displayName: person.displayName,
       accountEnabled: person.accountEnabled,
-      manager: person.manager || null,
+      userType: person.userType || null,
+      managerId: person.managerId || null,
       jobTitle: person.jobTitle,
       department: person.department,
       mail: person.mail,
@@ -671,17 +689,56 @@
     return !!person && person.accountEnabled === true;
   }
 
-  async function resolveEnabledPerson(person) {
+  function isGuestPerson(person) {
+    if (!person) {
+      return false;
+    }
+
+    const identity = (person.userPrincipalName || person.mail || "").toLowerCase();
+    return person.userType === "Guest" || identity.includes("#ext#");
+  }
+
+  function isActiveMemberPerson(person) {
+    return isEnabledPerson(person) && !isGuestPerson(person);
+  }
+
+  async function resolveActiveUserWithManager(person) {
     if (!person || !person.id) {
       return null;
     }
 
     if (typeof person.accountEnabled === "boolean") {
-      return person.accountEnabled ? person : null;
+      if (!person.accountEnabled) {
+        return null;
+      }
+      if (person.managerId) {
+        return person;
+      }
     }
 
     const fullPerson = await getUserById(person.id);
-    return isEnabledPerson(fullPerson) ? fullPerson : null;
+    if (!isActiveMemberPerson(fullPerson)) {
+      return null;
+    }
+
+    if (!fullPerson.managerId) {
+      try {
+        const manager = await graphGet(
+          "/users/" +
+            encodeURIComponent(fullPerson.id) +
+            "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
+        );
+        fullPerson.managerId = manager?.id || null;
+      } catch (err) {
+        const msg = safeMessage(err).toLowerCase();
+        if (!msg.includes("404") && !msg.includes("resource not found")) {
+          throw err;
+        }
+        fullPerson.managerId = null;
+      }
+    }
+
+    return fullPerson;
   }
 
   function initials(name) {
