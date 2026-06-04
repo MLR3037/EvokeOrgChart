@@ -268,14 +268,14 @@
       return personCache.get(id);
     }
 
-    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
+    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
   }
 
   async function getUserByUpn(upn) {
-    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
+    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
@@ -285,14 +285,14 @@
     const path =
       "/users/" +
       encodeURIComponent(userId) +
-      "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$top=999";
+      "/directReports/microsoft.graph.user?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$top=999";
 
     const result = await graphGet(path);
     const rawUsers = (result.value || []).map(normalizePerson);
     const users = [];
 
     for (let i = 0; i < rawUsers.length; i += 1) {
-      const validatedUser = await resolveEnabledPerson(rawUsers[i]);
+      const validatedUser = await resolveActiveUserWithManager(rawUsers[i]);
       if (validatedUser) {
         users.push(validatedUser);
         personCache.set(validatedUser.id, validatedUser);
@@ -314,7 +314,7 @@
       let manager;
       try {
         manager = await graphGet(
-          "/users/" + encodeURIComponent(currentId) + "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
+          "/users/" + encodeURIComponent(currentId) + "/manager/microsoft.graph.user?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
         );
       } catch (err) {
         const msg = safeMessage(err).toLowerCase();
@@ -329,7 +329,7 @@
       }
 
       const normalized = normalizePerson(manager);
-      const validatedManager = await resolveEnabledPerson(normalized);
+      const validatedManager = await resolveActiveUserWithManager(normalized);
       if (validatedManager) {
         personCache.set(validatedManager.id, validatedManager);
         chain.push(validatedManager);
@@ -420,7 +420,7 @@
   }
 
   async function getAllActiveUsers() {
-    let path = "/users?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$filter=accountEnabled eq true and userType eq 'Member'&$top=999";
+    let path = "/users?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType&$filter=accountEnabled eq true and userType eq 'Member'&$top=999";
     const users = [];
 
     while (path) {
@@ -655,6 +655,8 @@
     return {
       id: raw.id,
       displayName: raw.displayName || "Unknown",
+      givenName: raw.givenName || "",
+      surname: raw.surname || "",
       accountEnabled: typeof raw.accountEnabled === "boolean" ? raw.accountEnabled : null,
       userType: raw.userType || null,
       managerId: raw.managerId || raw.manager?.id || null,
@@ -672,6 +674,8 @@
     return {
       id: person.id,
       displayName: person.displayName,
+      givenName: person.givenName || "",
+      surname: person.surname || "",
       accountEnabled: person.accountEnabled,
       userType: person.userType || null,
       managerId: person.managerId || null,
@@ -699,7 +703,21 @@
   }
 
   function isActiveMemberPerson(person) {
-    return isEnabledPerson(person) && !isGuestPerson(person);
+    return isEnabledPerson(person) && !isGuestPerson(person) && isLikelyHumanAccount(person);
+  }
+
+  function isLikelyHumanAccount(person) {
+    if (!person) {
+      return false;
+    }
+
+    if ((person.givenName || "").trim() || (person.surname || "").trim()) {
+      return true;
+    }
+
+    // Exclude mailbox/group-style accounts that typically lack person profile fields.
+    const hasRoleSignals = (person.jobTitle || "").trim() || (person.department || "").trim();
+    return !!hasRoleSignals;
   }
 
   async function resolveActiveUserWithManager(person) {
@@ -726,7 +744,7 @@
         const manager = await graphGet(
           "/users/" +
             encodeURIComponent(fullPerson.id) +
-            "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
+          "/manager/microsoft.graph.user?$select=id,displayName,givenName,surname,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled,userType"
         );
         fullPerson.managerId = manager?.id || null;
       } catch (err) {
