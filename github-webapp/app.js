@@ -32,10 +32,36 @@
     setStatus("Set your Microsoft Entra clientId in config.js before signing in.", true);
   }
 
+  scrubLegacyMsalCache();
+
   initialize().catch(function (err) {
     console.error(err);
     setStatus("Initialization failed: " + safeMessage(err), true);
   });
+
+  function scrubLegacyMsalCache() {
+    // Remove stale request cache entries from older builds that requested invalid scopes.
+    try {
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !key.toLowerCase().includes("msal")) {
+          continue;
+        }
+
+        const value = localStorage.getItem(key) || "";
+        if (value.includes("Org.Read.All")) {
+          toRemove.push(key);
+        }
+      }
+
+      toRemove.forEach(function (key) {
+        localStorage.removeItem(key);
+      });
+    } catch (err) {
+      console.warn("Could not scrub stale MSAL cache entries.", err);
+    }
+  }
 
   async function initialize() {
     msalApp = new msal.PublicClientApplication({
