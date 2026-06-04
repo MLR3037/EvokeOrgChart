@@ -168,13 +168,17 @@
 
       let rootNode = upn
         ? await getUserByUpn(upn)
-        : await graphGet("/me?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation");
+        : await graphGet("/me?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
 
       if (!rootNode || !rootNode.id) {
         throw new Error("Could not resolve root user. Check the UPN or permissions.");
       }
 
       rootNode = normalizePerson(rootNode);
+
+      if (!rootNode.accountEnabled) {
+        throw new Error("The selected root user account is disabled.");
+      }
 
       const includeManagerChain = includeManagerCheckbox.checked;
       let managerChain = [];
@@ -262,14 +266,14 @@
       return personCache.get(id);
     }
 
-    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation");
+    const user = await graphGet("/users/" + encodeURIComponent(id) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
   }
 
   async function getUserByUpn(upn) {
-    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation");
+    const user = await graphGet("/users/" + encodeURIComponent(upn) + "?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled");
     const normalized = normalizePerson(user);
     personCache.set(normalized.id, normalized);
     return normalized;
@@ -279,10 +283,10 @@
     const path =
       "/users/" +
       encodeURIComponent(userId) +
-      "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation&$top=999";
+      "/directReports/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled&$top=999";
 
     const result = await graphGet(path);
-    const users = (result.value || []).map(normalizePerson);
+    const users = (result.value || []).map(normalizePerson).filter(isEnabledPerson);
 
     users.forEach(function (u) {
       personCache.set(u.id, u);
@@ -305,7 +309,7 @@
         manager = await graphGet(
           "/users/" +
             encodeURIComponent(currentId) +
-            "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation"
+            "/manager/microsoft.graph.user?$select=id,displayName,jobTitle,department,mail,userPrincipalName,officeLocation,accountEnabled"
         );
       } catch (err) {
         const msg = safeMessage(err).toLowerCase();
@@ -320,8 +324,10 @@
       }
 
       const normalized = normalizePerson(manager);
-      chain.push(normalized);
       personCache.set(normalized.id, normalized);
+      if (normalized.accountEnabled) {
+        chain.push(normalized);
+      }
       currentId = normalized.id;
     }
 
@@ -330,6 +336,10 @@
 
   async function buildSubtree(userId, depth, maxDepth) {
     const person = await getUserById(userId);
+    if (!person || !person.accountEnabled) {
+      return null;
+    }
+
     const node = cloneNode(person);
 
     if (depth >= maxDepth) {
@@ -341,6 +351,9 @@
     for (let i = 0; i < reports.length; i += 1) {
       const child = reports[i];
       const childNode = await buildSubtree(child.id, depth + 1, maxDepth);
+      if (!childNode) {
+        continue;
+      }
       childNode.parentId = node.id;
       children.push(childNode);
     }
@@ -557,6 +570,7 @@
     return {
       id: raw.id,
       displayName: raw.displayName || "Unknown",
+      accountEnabled: raw.accountEnabled !== false,
       jobTitle: raw.jobTitle || "",
       department: raw.department || "",
       mail: raw.mail || "",
@@ -571,6 +585,7 @@
     return {
       id: person.id,
       displayName: person.displayName,
+      accountEnabled: person.accountEnabled,
       jobTitle: person.jobTitle,
       department: person.department,
       mail: person.mail,
@@ -579,6 +594,10 @@
       parentId: null,
       children: []
     };
+  }
+
+  function isEnabledPerson(person) {
+    return !!person && person.accountEnabled !== false;
   }
 
   function initials(name) {
