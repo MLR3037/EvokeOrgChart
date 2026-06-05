@@ -63,13 +63,12 @@ body {
   font-size: clamp(1.7rem, 3vw, 2.5rem);
 }
 
-.eyebrow {
-  margin: 0 0 4px;
-  color: var(--brand);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 0.75rem;
+.company-logo {
+  display: block;
+  max-height: 56px;
+  width: auto;
+  margin: 0 0 8px;
+  object-fit: contain;
 }
 
 .subtitle {
