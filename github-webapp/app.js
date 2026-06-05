@@ -4,6 +4,11 @@
   const loadBtn = document.getElementById("loadBtn");
   const expandAllBtn = document.getElementById("expandAllBtn");
   const collapseAllBtn = document.getElementById("collapseAllBtn");
+  const zoomOutBtn = document.getElementById("zoomOutBtn");
+  const zoomInBtn = document.getElementById("zoomInBtn");
+  const zoomResetBtn = document.getElementById("zoomResetBtn");
+  const zoomSlider = document.getElementById("zoomSlider");
+  const zoomValue = document.getElementById("zoomValue");
   const rootUpnInput = document.getElementById("rootUpn");
   const maxDepthInput = document.getElementById("maxDepth");
   const includeManagerCheckbox = document.getElementById("includeManager");
@@ -13,6 +18,8 @@
   const chartContainer = document.getElementById("chartContainer");
 
   const personCache = new Map();
+  const photoCache = new Map();
+  const photoRequests = new Map();
   const expanded = new Set();
 
   let msalApp = null;
@@ -20,6 +27,8 @@
   let graphToken = null;
   let orgTree = null;
   let searchTerm = "";
+  let zoomLevel = 100;
+  let rerenderQueued = false;
 
   const cfg = window.APP_CONFIG;
 
@@ -132,6 +141,22 @@
       autoExpandForSearch();
       renderTree();
     });
+
+    zoomOutBtn.addEventListener("click", function () {
+      setZoomLevel(zoomLevel - 10);
+    });
+
+    zoomInBtn.addEventListener("click", function () {
+      setZoomLevel(zoomLevel + 10);
+    });
+
+    zoomResetBtn.addEventListener("click", function () {
+      setZoomLevel(100);
+    });
+
+    zoomSlider.addEventListener("input", function (e) {
+      setZoomLevel(Number(e.target.value) * 100);
+    });
   }
 
   async function onLogin() {
@@ -167,8 +192,11 @@
     orgTree = null;
     expanded.clear();
     personCache.clear();
+    photoCache.clear();
+    photoRequests.clear();
     searchTerm = "";
     searchInput.value = "";
+    setZoomLevel(100);
 
     refreshAuthUI();
     clearChart("Signed out. Sign in to load your org chart.");
@@ -217,6 +245,7 @@
       expandDefaults(orgTree, 0);
       autoExpandForSearch();
       renderTree();
+      hydratePhotosForTree(orgTree);
 
       const total = countNodes(orgTree);
       setStatus("Loaded " + total + " people.", false);
@@ -235,6 +264,10 @@
     expandAllBtn.disabled = !signedIn;
     collapseAllBtn.disabled = !signedIn;
     searchInput.disabled = !signedIn;
+    zoomOutBtn.disabled = !signedIn;
+    zoomInBtn.disabled = !signedIn;
+    zoomResetBtn.disabled = !signedIn;
+    zoomSlider.disabled = !signedIn;
 
     if (signedIn) {
       signedInText.textContent = "Signed in as " + (activeAccount.username || activeAccount.name || "account");
@@ -493,6 +526,7 @@
 
     chartContainer.classList.remove("empty-state");
     chartContainer.innerHTML = "";
+    chartContainer.style.setProperty("--chart-scale", String(zoomLevel / 100));
 
     const rootWrap = document.createElement("div");
     rootWrap.className = "tree-root";
@@ -516,7 +550,17 @@
 
     const avatar = document.createElement("span");
     avatar.className = "avatar";
-    avatar.textContent = initials(node.displayName);
+    const cachedPhoto = photoCache.get(node.id);
+    if (cachedPhoto) {
+      const photo = document.createElement("img");
+      photo.className = "avatar-photo";
+      photo.alt = node.displayName || "Person photo";
+      photo.src = cachedPhoto;
+      avatar.appendChild(photo);
+    } else {
+      avatar.textContent = initials(node.displayName);
+      void primePhoto(node.id);
+    }
 
     const text = document.createElement("div");
 
@@ -692,6 +736,7 @@
       mail: raw.mail || "",
       userPrincipalName: raw.userPrincipalName || "",
       officeLocation: raw.officeLocation || "",
+      photoDataUrl: null,
       parentId: null,
       children: []
     };
@@ -711,9 +756,81 @@
       mail: person.mail,
       userPrincipalName: person.userPrincipalName,
       officeLocation: person.officeLocation,
+      photoDataUrl: person.photoDataUrl || null,
       parentId: null,
       children: []
     };
+  }
+
+  async function hydratePhotosForTree(root) {
+    const nodes = [];
+    walkTree(root, function (node) {
+      nodes.push(node);
+    });
+
+    nodes.forEach(function (node) {
+      void primePhoto(node.id);
+    });
+  }
+
+  async function primePhoto(userId) {
+    if (!userId || photoCache.has(userId)) {
+      return photoCache.get(userId) || null;
+    }
+
+    if (photoRequests.has(userId)) {
+      return photoRequests.get(userId);
+    }
+
+    const request = (async function () {
+      try {
+        if (!graphToken) {
+          await ensureToken();
+        }
+
+        const response = await fetch("https://graph.microsoft.com/v1.0/users/" + encodeURIComponent(userId) + "/photo/$value", {
+          headers: {
+            Authorization: "Bearer " + graphToken
+          }
+        });
+
+        if (response.status === 404) {
+          photoCache.set(userId, null);
+          return null;
+        }
+
+        if (!response.ok) {
+          throw new Error("Graph " + response.status + ": " + (await response.text()));
+        }
+
+        const blob = await response.blob();
+        const dataUrl = await blobToDataUrl(blob);
+        photoCache.set(userId, dataUrl);
+        queueRerender();
+        return dataUrl;
+      } catch (err) {
+        photoCache.set(userId, null);
+        return null;
+      } finally {
+        photoRequests.delete(userId);
+      }
+    })();
+
+    photoRequests.set(userId, request);
+    return request;
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        resolve(String(reader.result || ""));
+      };
+      reader.onerror = function () {
+        reject(reader.error || new Error("Could not read photo blob."));
+      };
+      reader.readAsDataURL(blob);
+    });
   }
 
   function isEnabledPerson(person) {
@@ -835,5 +952,28 @@
 
   function isConfigured() {
     return cfg && cfg.auth && cfg.auth.clientId && cfg.auth.clientId !== "PUT_YOUR_CLIENT_ID_HERE";
+  }
+
+  function setZoomLevel(value) {
+    const nextValue = Math.max(60, Math.min(140, Math.round(value / 10) * 10));
+    zoomLevel = nextValue;
+    zoomSlider.value = String(nextValue / 100);
+    zoomValue.textContent = nextValue + "%";
+    zoomResetBtn.textContent = nextValue === 100 ? "Reset" : "Reset to 100%";
+    chartContainer.style.setProperty("--chart-scale", String(nextValue / 100));
+  }
+
+  function queueRerender() {
+    if (rerenderQueued) {
+      return;
+    }
+
+    rerenderQueued = true;
+    window.requestAnimationFrame(function () {
+      rerenderQueued = false;
+      if (orgTree) {
+        renderTree();
+      }
+    });
   }
 })();

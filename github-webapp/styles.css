@@ -137,6 +137,25 @@ input[type="search"] {
   margin-top: 10px;
 }
 
+.zoom-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.zoom-label,
+.zoom-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.zoom-row input[type="range"] {
+  width: 100%;
+}
+
 .btn {
   border: 1px solid transparent;
   border-radius: 10px;
@@ -193,6 +212,12 @@ input[type="search"] {
   border: 1px solid #d7e5ff;
 }
 
+.chart-wrap .tree-root {
+  transform: scale(var(--chart-scale, 1));
+  transform-origin: top left;
+  width: calc(100% / var(--chart-scale, 1));
+}
+
 .empty-state {
   display: flex;
   align-items: center;
@@ -245,6 +270,14 @@ input[type="search"] {
   justify-content: center;
   font-weight: 800;
   color: var(--brand-strong);
+  overflow: hidden;
+}
+
+.avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .name {
@@ -279,9 +312,10 @@ input[type="search"] {
 .children {
   margin-top: 18px;
   display: flex;
-  gap: 18px;
+  gap: 0;
   position: relative;
   padding-top: 18px;
+  justify-content: center;
 }
 
 .children::before {
@@ -297,7 +331,8 @@ input[type="search"] {
 
 .child-item {
   position: relative;
-  padding-top: 14px;
+  flex: 1 1 240px;
+  padding: 14px 9px 0;
 }
 
 .child-item::before {
@@ -315,20 +350,20 @@ input[type="search"] {
   content: "";
   position: absolute;
   top: 0;
-  left: -50%;
-  width: 100%;
+  left: -9px;
+  width: calc(100% + 18px);
   height: 2px;
   background: var(--line);
 }
 
 .child-item:first-child::after {
   left: 50%;
-  width: 50%;
+  width: calc(50% + 9px);
 }
 
 .child-item:last-child::after {
-  left: 0;
-  width: 50%;
+  left: -9px;
+  width: calc(50% + 9px);
 }
 
 @keyframes rise {
@@ -345,6 +380,10 @@ input[type="search"] {
 @media (max-width: 980px) {
   .control-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .zoom-row {
+    grid-template-columns: auto auto 1fr auto auto;
   }
 
   .inline-toggle {
