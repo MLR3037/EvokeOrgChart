@@ -29,6 +29,11 @@
   let searchTerm = "";
   let zoomLevel = 100;
   let rerenderQueued = false;
+  let isPanning = false;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panStartScrollLeft = 0;
+  let panStartScrollTop = 0;
 
   const cfg = window.APP_CONFIG;
 
@@ -157,6 +162,12 @@
     zoomSlider.addEventListener("input", function (e) {
       setZoomLevel(Number(e.target.value) * 100);
     });
+
+    chartContainer.addEventListener("pointerdown", onPanStart);
+    chartContainer.addEventListener("pointermove", onPanMove);
+    chartContainer.addEventListener("pointerup", onPanEnd);
+    chartContainer.addEventListener("pointercancel", onPanEnd);
+    chartContainer.addEventListener("pointerleave", onPanEnd);
   }
 
   async function onLogin() {
@@ -525,6 +536,7 @@
     }
 
     chartContainer.classList.remove("empty-state");
+    chartContainer.classList.add("pannable");
     chartContainer.innerHTML = "";
     chartContainer.style.setProperty("--chart-scale", String(zoomLevel / 100));
 
@@ -718,6 +730,8 @@
   }
 
   function clearChart(message) {
+    isPanning = false;
+    chartContainer.classList.remove("pannable", "is-panning");
     chartContainer.innerHTML = "<p>" + escapeHtml(message) + "</p>";
     chartContainer.classList.add("empty-state");
   }
@@ -975,5 +989,47 @@
         renderTree();
       }
     });
+  }
+
+  function onPanStart(event) {
+    if (!orgTree || event.button !== 0) {
+      return;
+    }
+
+    const target = event.target;
+    if (target && typeof target.closest === "function" && target.closest("button, input, a, label")) {
+      return;
+    }
+
+    isPanning = true;
+    panStartX = event.clientX;
+    panStartY = event.clientY;
+    panStartScrollLeft = chartContainer.scrollLeft;
+    panStartScrollTop = chartContainer.scrollTop;
+
+    chartContainer.classList.add("is-panning");
+    chartContainer.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function onPanMove(event) {
+    if (!isPanning) {
+      return;
+    }
+
+    const deltaX = event.clientX - panStartX;
+    const deltaY = event.clientY - panStartY;
+
+    chartContainer.scrollLeft = panStartScrollLeft - deltaX;
+    chartContainer.scrollTop = panStartScrollTop - deltaY;
+  }
+
+  function onPanEnd() {
+    if (!isPanning) {
+      return;
+    }
+
+    isPanning = false;
+    chartContainer.classList.remove("is-panning");
   }
 })();

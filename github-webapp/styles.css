@@ -212,6 +212,15 @@ input[type="search"] {
   border: 1px solid #d7e5ff;
 }
 
+.chart-wrap.pannable {
+  cursor: grab;
+}
+
+.chart-wrap.pannable.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .chart-wrap .tree-root {
   transform: scale(var(--chart-scale, 1));
   transform-origin: top left;
@@ -364,6 +373,10 @@ input[type="search"] {
 .child-item:last-child::after {
   left: -9px;
   width: calc(50% + 9px);
+}
+
+.child-item:only-child::after {
+  display: none;
 }
 
 @keyframes rise {
