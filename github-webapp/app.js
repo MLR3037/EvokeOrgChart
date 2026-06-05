@@ -32,6 +32,7 @@
     setStatus("Set your Microsoft Entra clientId in config.js before signing in.", true);
   }
 
+  ensureBrowserCrypto();
   scrubLegacyMsalCache();
 
   initialize().catch(function (err) {
@@ -63,7 +64,28 @@
     }
   }
 
+  function ensureBrowserCrypto() {
+    if (window.crypto && window.crypto.getRandomValues) {
+      return true;
+    }
+
+    if (window.msCrypto) {
+      window.crypto = window.msCrypto;
+      return true;
+    }
+
+    setStatus(
+      "This browser does not expose Web Crypto. Use a modern browser over HTTPS to sign in.",
+      true
+    );
+    return false;
+  }
+
   async function initialize() {
+    if (!ensureBrowserCrypto()) {
+      return;
+    }
+
     msalApp = new msal.PublicClientApplication({
       auth: {
         clientId: cfg.auth.clientId,
